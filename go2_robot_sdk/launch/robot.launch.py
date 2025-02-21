@@ -27,46 +27,47 @@ from launch import LaunchDescription
 from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
-from launch.actions import IncludeLaunchDescription
+from launch.actions import IncludeLaunchDescription, DeclareLaunchArgument
 from launch.launch_description_sources import FrontendLaunchDescriptionSource, PythonLaunchDescriptionSource
+
+curr_file_dir = os.path.dirname(os.path.realpath(__file__))
+
 
 def generate_launch_description():
 
-    use_sim_time = LaunchConfiguration('use_sim_time', default='false')
-    with_rviz2 = LaunchConfiguration('rviz2', default='true')
-    with_nav2 = LaunchConfiguration('nav2', default='true')
-    with_slam = LaunchConfiguration('slam', default='true')
-    with_foxglove = LaunchConfiguration('foxglove', default='true')
-    with_joystick = LaunchConfiguration('joystick', default='true')
-    with_teleop = LaunchConfiguration('teleop', default='true')
+    use_sim_time = LaunchConfiguration("use_sim_time", default="false")
+    with_rviz2 = LaunchConfiguration("rviz2", default="true")
+    with_nav2 = LaunchConfiguration("nav2", default="false")
+    with_slam = LaunchConfiguration("slam", default="true")
+    with_foxglove = LaunchConfiguration("foxglove", default="false")
+    with_joystick = LaunchConfiguration("joystick", default="false")
+    with_teleop = LaunchConfiguration("teleop", default="true")
 
-    robot_token = os.getenv('ROBOT_TOKEN', '') # how does this work for multiple robots?
-    robot_ip = os.getenv('ROBOT_IP', '')
+    robot_token = os.getenv("ROBOT_TOKEN", "")  # how does this work for multiple robots?
+    robot_ip = os.getenv("ROBOT_IP", "")
     robot_ip_lst = robot_ip.replace(" ", "").split(",")
     print("IP list:", robot_ip_lst)
 
-    conn_mode = "single" if len(robot_ip_lst) == 1 else "multi"
-
     # these are debug only
-    map_name = os.getenv('MAP_NAME', '3d_map')
-    save_map = os.getenv('MAP_SAVE', 'true')
+    map_name = os.getenv("MAP_NAME", "3d_map")
+    save_map = os.getenv("MAP_SAVE", "true")
 
-    conn_type = os.getenv('CONN_TYPE', 'webrtc')
+    conn_type = os.getenv("CONN_TYPE", "webrtc")
 
-    if conn_mode == 'single':
+    # conn_mode = "single" if len(robot_ip_lst) == 1 and conn_type != "cyclonedds" else "multi"
+    conn_mode = "single"
+
+    if conn_mode == "single":
         rviz_config = "single_robot_conf.rviz"
     else:
         rviz_config = "multi_robot_conf.rviz"
 
-    if conn_type == 'cyclonedds':
+    if conn_type == "cyclonedds":
         rviz_config = "cyclonedds_config.rviz"
 
-    urdf_file_name = 'multi_go2.urdf'
-    urdf = os.path.join(
-        get_package_share_directory('go2_robot_sdk'),
-        "urdf",
-        urdf_file_name)
-    with open(urdf, 'r') as infp:
+    urdf_file_name = "multi_go2.urdf"
+    urdf = os.path.join(get_package_share_directory("go2_robot_sdk"), "urdf", urdf_file_name)
+    with open(urdf, "r") as infp:
         robot_desc = infp.read()
 
     robot_desc_modified_lst = []
@@ -76,174 +77,173 @@ def generate_launch_description():
 
     urdf_launch_nodes = []
 
-    joy_params = os.path.join(
-        get_package_share_directory('go2_robot_sdk'),
-        'config', 'joystick.yaml'
-    )
+    joy_params = os.path.join(get_package_share_directory("go2_robot_sdk"), "config", "joystick.yaml")
 
-    default_config_topics = os.path.join(
-        get_package_share_directory('go2_robot_sdk'),
-        'config', 'twist_mux.yaml')
+    default_config_topics = os.path.join(get_package_share_directory("go2_robot_sdk"), "config", "twist_mux.yaml")
 
-    foxglove_launch = os.path.join(
-        get_package_share_directory('foxglove_bridge'),
-        'launch',
-        'foxglove_bridge_launch.xml',
-    )
+    # foxglove_launch = os.path.join(
+    #     get_package_share_directory('foxglove_bridge'),
+    #     'launch',
+    #     'foxglove_bridge_launch.xml',
+    # )
 
     slam_toolbox_config = os.path.join(
-        get_package_share_directory('go2_robot_sdk'),
-        'config',
-        'mapper_params_online_async.yaml'
+        get_package_share_directory("go2_robot_sdk"), "config", "mapper_params_online_async.yaml"
     )
 
-    nav2_config = os.path.join(
-        get_package_share_directory('go2_robot_sdk'),
-        'config',
-        'nav2_params.yaml'
-    )
+    nav2_config = os.path.join(get_package_share_directory("go2_robot_sdk"), "config", "nav2_params.yaml")
 
-    if conn_mode == 'single':
+    if conn_mode == "single":
 
-        urdf_file_name = 'go2.urdf'
-        urdf = os.path.join(
-            get_package_share_directory('go2_robot_sdk'),
-            "urdf",
-            urdf_file_name)
-        with open(urdf, 'r') as infp:
+        urdf_file_name = "go2.urdf"
+        urdf = os.path.join(get_package_share_directory("go2_robot_sdk"), "urdf", urdf_file_name)
+        with open(urdf, "r") as infp:
             robot_desc = infp.read()
 
         urdf_launch_nodes.append(
             Node(
-                package='robot_state_publisher',
-                executable='robot_state_publisher',
-                name='robot_state_publisher',
-                output='screen',
-                parameters=[{'use_sim_time': use_sim_time,
-                             'robot_description': robot_desc}],
-                arguments=[urdf]
+                package="robot_state_publisher",
+                executable="robot_state_publisher",
+                name="robot_state_publisher",
+                output="screen",
+                parameters=[{"use_sim_time": use_sim_time, "robot_description": robot_desc}],
+                arguments=[urdf],
             ),
         )
         urdf_launch_nodes.append(
             Node(
-                package='pointcloud_to_laserscan',
-                executable='pointcloud_to_laserscan_node',
-                name='pointcloud_to_laserscan',
+                package="pointcloud_to_laserscan",
+                executable="pointcloud_to_laserscan_node",
+                name="pointcloud_to_laserscan",
                 remappings=[
-                    ('cloud_in', 'point_cloud2'),
-                    ('scan', 'scan'),
+                    ("cloud_in", "point_cloud2"),
+                    ("scan", "scan"),
                 ],
-                parameters=[{
-                    'target_frame': 'base_link',
-                    'max_height': 0.5
-                }],
-                output='screen',
+                parameters=[
+                    {
+                        "target_frame": "base_link",
+                        "min_height": 0.1,
+                        "max_height": 0.5,
+                    }
+                ],
+                output="screen",
             ),
         )
 
     else:
-
         for i in range(len(robot_ip_lst)):
             urdf_launch_nodes.append(
                 Node(
-                    package='robot_state_publisher',
-                    executable='robot_state_publisher',
-                    name='robot_state_publisher',
-                    output='screen',
+                    package="robot_state_publisher",
+                    executable="robot_state_publisher",
+                    name="robot_state_publisher",
+                    output="screen",
                     namespace=f"robot{i}",
-                    parameters=[{'use_sim_time': use_sim_time,
-                                 'robot_description': robot_desc_modified_lst[i]}],
-                    arguments=[urdf]
+                    parameters=[{"use_sim_time": use_sim_time, "robot_description": robot_desc_modified_lst[i]}],
+                    arguments=[urdf],
                 ),
             )
             urdf_launch_nodes.append(
                 Node(
-                    package='pointcloud_to_laserscan',
-                    executable='pointcloud_to_laserscan_node',
-                    name='pointcloud_to_laserscan',
+                    package="pointcloud_to_laserscan",
+                    executable="pointcloud_to_laserscan_node",
+                    name="pointcloud_to_laserscan",
                     remappings=[
-                        ('cloud_in', f'robot{i}/point_cloud2'),
-                        ('scan', f'robot{i}/scan'),
+                        ("cloud_in", f"robot{i}/point_cloud2"),
+                        ("scan", f"robot{i}/scan"),
                     ],
-                    parameters=[{
-                        'target_frame': f'robot{i}/base_link',
-                        'max_height': 0.1
-                    }],
-                    output='screen',
+                    parameters=[{"target_frame": f"robot{i}/base_link", "max_height": 0.1}],
+                    output="screen",
                 ),
             )
 
-    return LaunchDescription([
-
-        *urdf_launch_nodes,
-        Node(
-            package='go2_robot_sdk',
-            executable='go2_driver_node',
-            parameters=[{'robot_ip': robot_ip, 'token': robot_token, "conn_type": conn_type}],
-        ),
-        Node(
-            package='go2_robot_sdk',
-            executable='lidar_to_pointcloud',
-            parameters=[{'robot_ip_lst': robot_ip_lst, 'map_name': map_name, 'map_save': save_map}],
-        ),
-        Node(
-            package='rviz2',
-            namespace='',
-            executable='rviz2',
-            condition=IfCondition(with_rviz2),
-            name='rviz2',
-            arguments=['-d' + os.path.join(get_package_share_directory('go2_robot_sdk'), 'config', rviz_config)]
-        ),
-        Node(
-            package='joy',
-            executable='joy_node',
-            condition=IfCondition(with_joystick),
-            parameters=[joy_params]
-        ),
-        Node(
-            package='teleop_twist_joy',
-            executable='teleop_node',
-            name='teleop_node',
-            condition=IfCondition(with_joystick),
-            parameters=[default_config_topics],
-        ),
-        Node(
-            package='twist_mux',
-            executable='twist_mux',
-            output='screen',
-            condition=IfCondition(with_teleop),
-            parameters=[
-                {'use_sim_time': use_sim_time},
-                default_config_topics
-            ],
-        ),
-
-        IncludeLaunchDescription(
-            FrontendLaunchDescriptionSource(foxglove_launch),
-            condition=IfCondition(with_foxglove),
-        ),
-
-        IncludeLaunchDescription(
-            PythonLaunchDescriptionSource([
-                os.path.join(get_package_share_directory(
-                    'slam_toolbox'), 'launch', 'online_async_launch.py')
-            ]),
-            condition=IfCondition(with_slam),
-            launch_arguments={
-                'slam_params_file': slam_toolbox_config,
-                'use_sim_time': use_sim_time,
-            }.items(),
-        ),
-
-        IncludeLaunchDescription(
-            PythonLaunchDescriptionSource([
-                os.path.join(get_package_share_directory(
-                    'nav2_bringup'), 'launch', 'navigation_launch.py')
-            ]),
-            condition=IfCondition(with_nav2),
-            launch_arguments={
-                'params_file': nav2_config,
-                'use_sim_time': use_sim_time,
-            }.items(),
-        ),
-    ])
+    return LaunchDescription(
+        [
+            DeclareLaunchArgument("leaf_size", default_value="0.12", description="Voxel grid leaf size"),
+            *urdf_launch_nodes,
+            Node(
+                package="pcl_ros",
+                executable="filter_voxel_grid_node",
+                name="filter_voxel_grid_node",
+                parameters=[
+                    {
+                        "leaf_size": LaunchConfiguration("leaf_size"),
+                        "filter_field_name": "z",
+                        "filter_limit_min": 0.0,
+                        "filter_limit_max": 0.7,
+                        "filter_limit_negative": False,
+                    }
+                ],
+                # remappings=[('input', '/camera/depth/color/points')]
+                # remappings=[('input', 'points')]
+                remappings=[("input", "/point_cloud2"), ("output", "/point_cloud2/render")],
+            ),
+            Node(
+                package="go2_robot_sdk",
+                executable="go2_driver_node",
+                parameters=[
+                    {
+                        "robot_ip": robot_ip,
+                        "token": robot_token,
+                        "conn_type": conn_type,
+                        "enable_video": "False",
+                    }
+                ],
+            ),
+            Node(
+                package="go2_robot_sdk",
+                executable="lidar_to_pointcloud",
+                parameters=[{"robot_ip_lst": robot_ip_lst, "map_name": map_name, "map_save": save_map}],
+            ),
+            Node(
+                package="rviz2",
+                namespace="",
+                executable="rviz2",
+                condition=IfCondition(with_rviz2),
+                name="rviz2",
+                # arguments=["-d" + os.path.join(get_package_share_directory("go2_robot_sdk"), "config", rviz_config)],
+                arguments=[
+                    "-d" + f"/home/unitree/go2_ros2_ws/src/go2_robot_sdk/config/{rviz_config}",
+                ],
+            ),
+            Node(package="joy", executable="joy_node", condition=IfCondition(with_joystick), parameters=[joy_params]),
+            Node(
+                package="teleop_twist_joy",
+                executable="teleop_node",
+                name="teleop_node",
+                condition=IfCondition(with_joystick),
+                parameters=[default_config_topics],
+            ),
+            Node(
+                package="twist_mux",
+                executable="twist_mux",
+                output="screen",
+                condition=IfCondition(with_teleop),
+                parameters=[{"use_sim_time": use_sim_time}, default_config_topics],
+            ),
+            IncludeLaunchDescription(
+                PythonLaunchDescriptionSource(
+                    [os.path.join(get_package_share_directory("slam_toolbox"), "launch", "online_async_launch.py")]
+                ),
+                condition=IfCondition(with_slam),
+                launch_arguments={
+                    "slam_params_file": slam_toolbox_config,
+                    "use_sim_time": use_sim_time,
+                }.items(),
+            ),
+            IncludeLaunchDescription(
+                PythonLaunchDescriptionSource(
+                    [os.path.join(get_package_share_directory("nav2_bringup"), "launch", "navigation_launch.py")]
+                ),
+                condition=IfCondition(with_nav2),
+                launch_arguments={
+                    "params_file": nav2_config,
+                    "use_sim_time": use_sim_time,
+                }.items(),
+            ),
+            # IncludeLaunchDescription(
+            #     FrontendLaunchDescriptionSource(foxglove_launch),
+            #     condition=IfCondition(with_foxglove),
+            # ),
+        ]
+    )

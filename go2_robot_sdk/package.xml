@@ -21,12 +21,12 @@
   <exec_depend>nav2_map_server</exec_depend>
   <exec_depend>nav2_util</exec_depend>
   <exec_depend>pointcloud_to_laserscan</exec_depend>
-  
+  <exec_depend>image_transport</exec_depend>
+  <exec_depend>image_transport_plugins</exec_depend>
+  <exec_depend>pcl_ros</exec_depend>
   <exec_depend>slam_toolbox</exec_depend>
-
-  <exec_depend>foxglove_bridge</exec_depend>
-
   <exec_depend>cv_bridge</exec_depend>
+  <!-- <exec_depend>foxglove_bridge</exec_depend> -->
 
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>
