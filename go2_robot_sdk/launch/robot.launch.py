@@ -37,10 +37,10 @@ def generate_launch_description():
 
     use_sim_time = LaunchConfiguration("use_sim_time", default="false")
     with_rviz2 = LaunchConfiguration("rviz2", default="true")
-    with_nav2 = LaunchConfiguration("nav2", default="false")
+    with_nav2 = LaunchConfiguration("nav2", default="true")
     with_slam = LaunchConfiguration("slam", default="true")
     with_foxglove = LaunchConfiguration("foxglove", default="false")
-    with_joystick = LaunchConfiguration("joystick", default="false")
+    with_joystick = LaunchConfiguration("joystick", default="true")
     with_teleop = LaunchConfiguration("teleop", default="true")
 
     robot_token = os.getenv("ROBOT_TOKEN", "")  # how does this work for multiple robots?
@@ -87,9 +87,10 @@ def generate_launch_description():
     #     'foxglove_bridge_launch.xml',
     # )
 
-    slam_toolbox_config = os.path.join(
-        get_package_share_directory("go2_robot_sdk"), "config", "mapper_params_online_async.yaml"
-    )
+    # slam_toolbox_config = os.path.join(
+    #     get_package_share_directory("go2_robot_sdk"), "config", "mapper_params_online_async.yaml"
+    # )
+    slam_toolbox_config = "/home/unitree/go2_ros2_ws/src/go2_robot_sdk/config/mapper_params_online_async.yaml"
 
     nav2_config = os.path.join(get_package_share_directory("go2_robot_sdk"), "config", "nav2_params.yaml")
 
@@ -117,11 +118,13 @@ def generate_launch_description():
                 name="pointcloud_to_laserscan",
                 remappings=[
                     ("cloud_in", "point_cloud2"),
+                    # ("cloud_in", "utlidar/lidar" if conn_type == "cyclonedds" else "point_cloud2"),
                     ("scan", "scan"),
                 ],
                 parameters=[
                     {
                         "target_frame": "base_link",
+                        # "target_frame": "radar" if conn_type == "cyclonedds" else "base_link",
                         "min_height": 0.1,
                         "max_height": 0.5,
                     }
@@ -163,20 +166,38 @@ def generate_launch_description():
             *urdf_launch_nodes,
             Node(
                 package="pcl_ros",
-                executable="filter_voxel_grid_node",
-                name="filter_voxel_grid_node",
+                # executable="filter_voxel_grid_node",
+                # name="filter_voxel_grid_node",
+                # parameters=[
+                #     {
+                #         "leaf_size": LaunchConfiguration("leaf_size"),
+                #         "filter_field_name": "z",
+                #         "filter_limit_min": 0.0,
+                #         "filter_limit_max": 0.7,
+                #         "filter_limit_negative": False,
+                #     }
+                # ],
+                # remappings=[
+                #     ("input", "/utlidar/cloud"),
+                #     ("output", "/utlidar/pcl"),
+                # ],
+                executable="filter_crop_box_node",
+                name="filter_crop_box_node",
                 parameters=[
                     {
-                        "leaf_size": LaunchConfiguration("leaf_size"),
-                        "filter_field_name": "z",
-                        "filter_limit_min": 0.0,
-                        "filter_limit_max": 0.7,
-                        "filter_limit_negative": False,
+                        "min_x": -2.0,
+                        "max_x": 2.0,
+                        "min_y": -2.0,
+                        "max_y": 2.0,
+                        "min_z": 0.0,
+                        "max_z": 0.01,
+                        "negative": True,
                     }
                 ],
-                # remappings=[('input', '/camera/depth/color/points')]
-                # remappings=[('input', 'points')]
-                remappings=[("input", "/point_cloud2"), ("output", "/point_cloud2/render")],
+                remappings=[
+                    ("input", "/utlidar/cloud"),
+                    ("output", "/utlidar/pcl"),
+                ],
             ),
             Node(
                 package="go2_robot_sdk",
@@ -187,6 +208,9 @@ def generate_launch_description():
                         "token": robot_token,
                         "conn_type": conn_type,
                         "enable_video": "False",
+                        # "lidar_topic": "/utlidar/cloud",
+                        # "lidar_topic": "/utlidar/pcl",
+                        "lidar_topic": "/utlidar/cloud_deskewed",
                     }
                 ],
             ),

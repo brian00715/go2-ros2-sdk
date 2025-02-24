@@ -22,38 +22,37 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
+import asyncio
 import json
 import logging
 import os
 import threading
-import asyncio
 
+import numpy as np
+import rclpy
+import tf2_geometry_msgs
+import transformations as tft
 from aiortc import MediaStreamTrack
 from cv_bridge import CvBridge
-
-
+from geometry_msgs.msg import PointStamped, PoseStamped, Transform, TransformStamped, Twist
+from nav_msgs.msg import Odometry
+from rclpy.node import Node
+from rclpy.qos import QoSHistoryPolicy, QoSProfile, QoSReliabilityPolicy
+from scripts.go2_camerainfo import load_camera_info
 from scripts.go2_constants import ROBOT_CMD, RTC_TOPIC
 from scripts.go2_func import gen_command, gen_mov_command
 from scripts.go2_lidar_decoder import update_meshes_for_cloud2
 from scripts.go2_math import get_robot_joints
-from scripts.go2_camerainfo import load_camera_info
 from scripts.webrtc_driver import Go2Connection
+from sensor_msgs.msg import CameraInfo, Image, JointState, Joy, PointCloud2, PointField
+from sensor_msgs_py import point_cloud2 as point_cloud2_sen
+from std_msgs.msg import Header
+from tf2_ros import TransformBroadcaster
 
-import rclpy
-from rclpy.node import Node
-from rclpy.qos import QoSProfile, QoSHistoryPolicy, QoSReliabilityPolicy
+from go2_interfaces.msg import IMU, Go2State
+from unitree_go.msg import LowState, VoxelMapCompressed, WebRtcReq
 
 # from rclpy.qos_overriding_options import QoSOverridingOptions
-
-from tf2_ros import TransformBroadcaster
-from geometry_msgs.msg import Twist, TransformStamped, PoseStamped
-from go2_interfaces.msg import Go2State, IMU
-from unitree_go.msg import LowState, VoxelMapCompressed, WebRtcReq
-from sensor_msgs.msg import PointCloud2, PointField, JointState, Joy
-from sensor_msgs_py import point_cloud2
-from std_msgs.msg import Header
-from nav_msgs.msg import Odometry
-from sensor_msgs.msg import Image, CameraInfo
 
 
 logging.basicConfig(level=logging.WARN)
@@ -72,6 +71,7 @@ class RobotBaseNode(Node):
         self.declare_parameter("enable_video", True)
         self.declare_parameter("decode_lidar", True)
         self.declare_parameter("publish_raw_voxel", False)
+        self.declare_parameter("lidar_topic", "/utlidar/cloud")  # or /utlidar/cloud_deskewed
 
         self.robot_ip = self.get_parameter("robot_ip").get_parameter_value().string_value
         self.token = self.get_parameter("token").get_parameter_value().string_value
@@ -80,6 +80,7 @@ class RobotBaseNode(Node):
         self.enable_video = self.get_parameter("enable_video").get_parameter_value().bool_value
         self.decode_lidar = self.get_parameter("decode_lidar").get_parameter_value().bool_value
         self.publish_raw_voxel = self.get_parameter("publish_raw_voxel").get_parameter_value().bool_value
+        self.lidar_topic = self.get_parameter("lidar_topic").get_parameter_value().string_value
 
         # self.conn_mode = "single" if (len(self.robot_ip_lst) == 1 and self.conn_type != "cyclonedds") else "multi"
         self.conn_mode = "single"
@@ -210,11 +211,11 @@ class RobotBaseNode(Node):
         self.create_subscription(Joy, "joy", self.joy_cb, qos_profile)
 
         # Support for CycloneDDS (EDU version via ethernet)
+        self.lidar_msg = None
         if self.conn_type == "cyclonedds":
             self.create_subscription(LowState, "lowstate", self.publish_joint_state_cyclonedds, qos_profile)
-            self.create_subscription(PoseStamped, "/utlidar/robot_pose", self.publish_body_poss_cyclonedds, qos_profile)
-            # self.create_subscription(PointCloud2, "/utlidar/cloud", self.publish_lidar_cyclonedds, qos_profile)
-            self.create_subscription(PointCloud2, "/utlidar/cloud_deskewed", self.publish_lidar_cyclonedds, qos_profile)
+            self.create_subscription(PoseStamped, "/utlidar/robot_pose", self.publish_body_pose_cyclonedds, qos_profile)
+            self.create_subscription(PointCloud2, self.lidar_topic, self.lidar_cyclonedds_cb, qos_profile)
 
         self.timer = self.create_timer(0.02, self.timer_callback)  # 0.1
         self.timer_lidar = self.create_timer(0.05, self.timer_callback_lidar)  # 0.5
@@ -234,6 +235,9 @@ class RobotBaseNode(Node):
         if self.conn_type == "webrtc" and self.publish_raw_voxel:
             self.publish_voxel_webrtc()
 
+        # if self.lidar_msg:
+        #     self.go2_lidar_pub[0].publish(self.lidar_msg)
+
     def cmd_vel_cb(self, msg, robot_num):
         x = msg.linear.x
         y = msg.linear.y
@@ -251,7 +255,7 @@ class RobotBaseNode(Node):
     def joy_cb(self, msg):
         self.joy_state = msg
 
-    def publish_body_poss_cyclonedds(self, msg):
+    def publish_body_pose_cyclonedds(self, msg):
         odom_trans = TransformStamped()
         odom_trans.header.stamp = self.get_clock().now().to_msg()
         odom_trans.header.frame_id = "odom"
@@ -298,11 +302,32 @@ class RobotBaseNode(Node):
         ]
         self.joint_pub[0].publish(joint_state)
 
-    def publish_lidar_cyclonedds(self, msg):
-        # msg.header = Header(frame_id="radar")
-        msg.header = Header(frame_id="odom")
+    def lidar_cyclonedds_cb(self, msg):
+        if self.lidar_topic == "/utlidar/cloud":
+            frame = "radar"
+        elif self.lidar_topic == "/utlidar/cloud_deskewed":
+            frame = "odom"
+        msg.header = Header(frame_id=frame)
         msg.header.stamp = self.get_clock().now().to_msg()
-        self.go2_lidar_pub[0].publish(msg)
+        self.lidar_msg = msg
+        if 1:
+            self.go2_lidar_pub[0].publish(msg)
+        if 0:
+            """base_link to radar
+            - Translation: [0.289, 0.000, -0.047]
+            - Rotation: in Quaternion [0.000, 0.991, 0.000, 0.131]
+            """
+            msg.header.frame_id = "base_link"
+            transform = Transform()
+            transform.translation.x = 0.289
+            transform.translation.y = 0.0
+            transform.translation.z = -0.047
+            transform.rotation.x = 0.0
+            transform.rotation.y = 0.991
+            transform.rotation.z = 0.0
+            transform.rotation.w = 0.131
+            transformed_pc = self.transform_pc(TransformStamped(transform=transform), msg, msg.header)
+            self.go2_lidar_pub[0].publish(transformed_pc)
 
     def joy_cmd(self, robot_num):
         if robot_num in self.conn and robot_num in self.robot_cmd_vel and self.robot_cmd_vel[robot_num] is not None:
@@ -432,7 +457,7 @@ class RobotBaseNode(Node):
                     PointField(name="z", offset=8, datatype=PointField.FLOAT32, count=1),
                     PointField(name="intensity", offset=12, datatype=PointField.FLOAT32, count=1),
                 ]
-                point_cloud = point_cloud2.create_cloud(point_cloud.header, fields, points)
+                point_cloud = point_cloud2_sen.create_cloud(point_cloud.header, fields, points)
                 self.go2_lidar_pub[i].publish(point_cloud)
 
     def publish_voxel_webrtc(self):
@@ -577,6 +602,25 @@ class RobotBaseNode(Node):
                 imu.rpy = list(map(float, self.robot_sport_state[str(i)]["data"]["imu_state"]["rpy"]))
                 imu.temperature = self.robot_sport_state[str(i)]["data"]["imu_state"]["temperature"]
                 self.imu_pub[i].publish(imu)
+
+    @staticmethod
+    def transform_pc(transform: TransformStamped, msg: PointCloud2, header: Header):
+        pc_data = point_cloud2_sen.read_points(msg, field_names=("x", "y", "z"), skip_nans=True)
+        pc_array = np.array(list(pc_data))
+
+        transformed_points = []
+        for point in pc_array:
+            point_stamped = PointStamped()
+            point_stamped.header = msg.header
+            point_stamped.point.x = point[0]
+            point_stamped.point.y = point[1]
+            point_stamped.point.z = point[2]
+
+            transformed_point = tf2_geometry_msgs.do_transform_point(point_stamped, transform)
+            transformed_points.append([transformed_point.point.x, transformed_point.point.y, transformed_point.point.z])
+
+        transformed_pc = point_cloud2_sen.create_cloud_xyz32(header, transformed_points)
+        return transformed_pc
 
     async def run(self, conn, robot_num):
         self.conn[robot_num] = conn

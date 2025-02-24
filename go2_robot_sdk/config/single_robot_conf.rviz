@@ -81,8 +81,8 @@ Visualization Manager:
     - Alpha: 1
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
-        Max Value: 0.3764895796775818
-        Min Value: -0.4115903079509735
+        Max Value: 1.024999976158142
+        Min Value: -0.1249999850988388
         Value: true
       Axis: Z
       Channel Name: intensity
@@ -90,7 +90,7 @@ Visualization Manager:
       Color: 255; 255; 255
       Color Transformer: AxisColor
       Decay Time: 0
-      Enabled: true
+      Enabled: false
       Invert Rainbow: false
       Max Color: 255; 255; 255
       Max Intensity: 156
@@ -107,10 +107,10 @@ Visualization Manager:
         Durability Policy: Volatile
         History Policy: Keep Last
         Reliability Policy: Best Effort
-        Value: /point_cloud2/render
+        Value: /point_cloud2
       Use Fixed Frame: true
       Use rainbow: true
-      Value: true
+      Value: false
     - Alpha: 1
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
@@ -308,8 +308,6 @@ Visualization Manager:
           Value: false
         imu:
           Value: false
-        map:
-          Value: true
         odom:
           Value: true
         radar:
@@ -320,58 +318,57 @@ Visualization Manager:
       Show Axes: true
       Show Names: true
       Tree:
-        map:
-          odom:
-            base_link:
-              FL_hip:
-                FL_thigh:
-                  FL_calf:
-                    FL_calflower:
-                      FL_calflower1:
-                        {}
-                    FL_foot:
+        odom:
+          base_link:
+            FL_hip:
+              FL_thigh:
+                FL_calf:
+                  FL_calflower:
+                    FL_calflower1:
                       {}
-              FR_hip:
-                FR_thigh:
-                  FR_calf:
-                    FR_calflower:
-                      FR_calflower1:
-                        {}
-                    FR_foot:
+                  FL_foot:
+                    {}
+            FR_hip:
+              FR_thigh:
+                FR_calf:
+                  FR_calflower:
+                    FR_calflower1:
                       {}
-              Head_upper:
-                Head_lower:
-                  {}
-                front_camera:
-                  {}
-              RL_hip:
-                RL_thigh:
-                  RL_calf:
-                    RL_calflower:
-                      RL_calflower1:
-                        {}
-                    RL_foot:
-                      {}
-              RR_hip:
-                RR_thigh:
-                  RR_calf:
-                    RR_calflower:
-                      RR_calflower1:
-                        {}
-                    RR_foot:
-                      {}
-              base_footprint:
+                  FR_foot:
+                    {}
+            Head_upper:
+              Head_lower:
                 {}
-              imu:
+              front_camera:
                 {}
-              radar:
-                {}
+            RL_hip:
+              RL_thigh:
+                RL_calf:
+                  RL_calflower:
+                    RL_calflower1:
+                      {}
+                  RL_foot:
+                    {}
+            RR_hip:
+              RR_thigh:
+                RR_calf:
+                  RR_calflower:
+                    RR_calflower1:
+                      {}
+                  RR_foot:
+                    {}
+            base_footprint:
+              {}
+            imu:
+              {}
+            radar:
+              {}
       Update Interval: 0
       Value: true
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48
-    Fixed Frame: map
+    Fixed Frame: odom
     Frame Rate: 30
   Name: root
   Tools:
@@ -454,5 +451,5 @@ Window Geometry:
   Views:
     collapsed: true
   Width: 1208
-  X: 72
+  X: 334
   Y: 27
