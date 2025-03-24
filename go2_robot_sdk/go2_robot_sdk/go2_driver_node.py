@@ -43,12 +43,13 @@ from scripts.go2_constants import ROBOT_CMD, RTC_TOPIC
 from scripts.go2_func import gen_command, gen_mov_command
 from scripts.go2_lidar_decoder import update_meshes_for_cloud2
 from scripts.go2_math import get_robot_joints
+from scripts.sport_client import SportClient
 from scripts.webrtc_driver import Go2Connection
 from sensor_msgs.msg import CameraInfo, Image, JointState, Joy, PointCloud2, PointField
 from sensor_msgs_py import point_cloud2 as point_cloud2_sen
 from std_msgs.msg import Header
 from tf2_ros import TransformBroadcaster
-
+from unitree_api.msg import Request
 from go2_interfaces.msg import IMU, Go2State
 from unitree_go.msg import LowState, VoxelMapCompressed, WebRtcReq
 
@@ -116,7 +117,6 @@ class RobotBaseNode(Node):
                     PointCloud2,
                     "point_cloud2",
                     best_effort_qos,
-                    # qos_overriding_options=QoSOverridingOptions.with_default_policies()
                 )
             )
             self.go2_odometry_pub.append(self.create_publisher(Odometry, "odom", qos_profile))
@@ -127,7 +127,6 @@ class RobotBaseNode(Node):
                         Image,
                         "camera/image_raw",
                         best_effort_qos,
-                        # qos_overriding_options=QoSOverridingOptions.with_default_policies()
                     )
                 )
                 self.camera_info_pub.append(
@@ -135,7 +134,6 @@ class RobotBaseNode(Node):
                         CameraInfo,
                         "camera/camera_info",
                         best_effort_qos,
-                        # qos_overriding_options=QoSOverridingOptions.with_default_policies()
                     )
                 )
             if self.publish_raw_voxel:
@@ -216,6 +214,10 @@ class RobotBaseNode(Node):
             self.create_subscription(LowState, "lowstate", self.publish_joint_state_cyclonedds, qos_profile)
             self.create_subscription(PoseStamped, "/utlidar/robot_pose", self.publish_body_pose_cyclonedds, qos_profile)
             self.create_subscription(PointCloud2, self.lidar_topic, self.lidar_cyclonedds_cb, qos_profile)
+            self.sport_pub = self.create_publisher(Request, "/api/sport/request", qos_profile)
+            self.sport_client = SportClient()
+            self.robot_cmd_vel_msg = None
+            self.joy_state = None
 
         self.timer = self.create_timer(0.02, self.timer_callback)  # 0.1
         self.timer_lidar = self.create_timer(0.05, self.timer_callback_lidar)  # 0.5
@@ -245,7 +247,10 @@ class RobotBaseNode(Node):
 
         # Allow omni-directional movement
         if x != 0.0 or y != 0.0 or z != 0.0:
-            self.robot_cmd_vel[robot_num] = gen_mov_command(round(x, 2), round(y, 2), round(z, 2))
+            if self.conn_type == "webrtc":
+                self.robot_cmd_vel[robot_num] = gen_mov_command(round(x, 2), round(y, 2), round(z, 2))
+            elif self.conn_type == "cyclonedds":
+                self.robot_cmd_vel_msg = self.sport_client.move(x, y, z)
 
     def webrtc_req_cb(self, msg, robot_num):
         payload = gen_command(msg.api_id, msg.parameter, msg.topic)
@@ -329,23 +334,46 @@ class RobotBaseNode(Node):
             transformed_pc = self.transform_pc(TransformStamped(transform=transform), msg, msg.header)
             self.go2_lidar_pub[0].publish(transformed_pc)
 
-    def joy_cmd(self, robot_num):
-        if robot_num in self.conn and robot_num in self.robot_cmd_vel and self.robot_cmd_vel[robot_num] is not None:
-            self.get_logger().info("Move")
-            self.conn[robot_num].data_channel.send(self.robot_cmd_vel[robot_num])
-            self.robot_cmd_vel[robot_num] = None
+    def send_joy_cmd(self, robot_num):
+        if self.conn_type == "webrtc":
+            if robot_num in self.conn and robot_num in self.robot_cmd_vel and self.robot_cmd_vel[robot_num] is not None:
+                self.get_logger().info("Move")
+                self.conn[robot_num].data_channel.send(self.robot_cmd_vel[robot_num])
+                self.robot_cmd_vel[robot_num] = None
 
-        if robot_num in self.conn and self.joy_state.buttons and self.joy_state.buttons[1]:
-            self.get_logger().info("Stand down")
-            stand_down_cmd = gen_command(ROBOT_CMD["StandDown"])
-            self.conn[robot_num].data_channel.send(stand_down_cmd)
+            if robot_num in self.conn and self.joy_state.buttons and self.joy_state.buttons[1]:
+                self.get_logger().info("Stand down")
+                stand_down_cmd = gen_command(ROBOT_CMD["StandDown"])
+                self.conn[robot_num].data_channel.send(stand_down_cmd)
 
-        if robot_num in self.conn and self.joy_state.buttons and self.joy_state.buttons[0]:
-            self.get_logger().info("Stand up")
-            stand_up_cmd = gen_command(ROBOT_CMD["StandUp"])
-            self.conn[robot_num].data_channel.send(stand_up_cmd)
-            move_cmd = gen_command(ROBOT_CMD["BalanceStand"])
-            self.conn[robot_num].data_channel.send(move_cmd)
+            if robot_num in self.conn and self.joy_state.buttons and self.joy_state.buttons[0]:
+                self.get_logger().info("Stand up")
+                stand_up_cmd = gen_command(ROBOT_CMD["StandUp"])
+                self.conn[robot_num].data_channel.send(stand_up_cmd)
+                move_cmd = gen_command(ROBOT_CMD["BalanceStand"])
+                self.conn[robot_num].data_channel.send(move_cmd)
+                
+        elif self.conn_type == "cyclonedds":
+            if self.robot_cmd_vel_msg:
+                self.sport_pub.publish(self.robot_cmd_vel_msg)
+                self.robot_cmd_vel_msg = None
+
+            if self.joy_state and self.joy_state.buttons[1]:
+                self.get_logger().info("Stand down")
+                stand_down_cmd = Request()
+                stand_down_cmd.header.identity.api_id = ROBOT_CMD["StandDown"]
+                self.sport_pub.publish(stand_down_cmd)
+                self.joy_state = None
+
+            if self.joy_state and self.joy_state.buttons[0]:
+                self.get_logger().info("Stand up")
+                stand_up_cmd = Request()
+                stand_up_cmd.header.identity.api_id = ROBOT_CMD["StandUp"]
+                self.sport_pub.publish(stand_up_cmd)
+                move_cmd = Request()
+                move_cmd.header.identity.api_id = ROBOT_CMD["BalanceStand"]
+                self.sport_pub.publish(move_cmd)
+                self.joy_state = None
 
     def on_validated(self, robot_num):
         if robot_num in self.conn:
@@ -631,8 +659,10 @@ class RobotBaseNode(Node):
 
         while True:
             if self.conn_type == "webrtc":
-                self.joy_cmd(robot_num)
+                self.send_joy_cmd(robot_num)
                 self.publish_webrtc_commands(robot_num)
+            elif self.conn_type == "cyclonedds":
+                self.send_joy_cmd(robot_num)
             await asyncio.sleep(0.1)
 
 

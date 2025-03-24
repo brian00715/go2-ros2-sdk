@@ -5,7 +5,6 @@ Panels:
     Property Tree Widget:
       Expanded:
         - /Global Options1
-        - /PointCloud21
         - /PointCloud21/Topic1
         - /PointCloud21/Autocompute Value Bounds1
         - /Image1/Topic1
@@ -26,11 +25,6 @@ Panels:
       - /Current View1
     Name: Views
     Splitter Ratio: 0.5
-  - Class: rviz_common/Time
-    Experimental: false
-    Name: Time
-    SyncMode: 0
-    SyncSource: LaserScan
   - Class: slam_toolbox::SlamToolboxPlugin
     Name: SlamToolboxPlugin
   - Class: nav2_rviz_plugins/Navigation 2
@@ -234,8 +228,8 @@ Visualization Manager:
     - Alpha: 1
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
-        Max Value: 2.296269655227661
-        Min Value: -0.2340957522392273
+        Max Value: 0.9005078077316284
+        Min Value: -0.1297869086265564
         Value: true
       Axis: Z
       Channel Name: intensity
@@ -248,7 +242,7 @@ Visualization Manager:
       Max Color: 255; 255; 255
       Max Intensity: 255
       Min Color: 0; 0; 0
-      Min Intensity: 61
+      Min Intensity: 62
       Name: PointCloud2
       Position Transformer: XYZ
       Selectable: true
@@ -461,8 +455,6 @@ Visualization Manager:
           Value: false
         imu:
           Value: false
-        map:
-          Value: true
         odom:
           Value: true
         radar:
@@ -473,52 +465,51 @@ Visualization Manager:
       Show Axes: true
       Show Names: true
       Tree:
-        map:
-          odom:
-            base_link:
-              FL_hip:
-                FL_thigh:
-                  FL_calf:
-                    FL_calflower:
-                      FL_calflower1:
-                        {}
-                    FL_foot:
+        odom:
+          base_link:
+            FL_hip:
+              FL_thigh:
+                FL_calf:
+                  FL_calflower:
+                    FL_calflower1:
                       {}
-              FR_hip:
-                FR_thigh:
-                  FR_calf:
-                    FR_calflower:
-                      FR_calflower1:
-                        {}
-                    FR_foot:
+                  FL_foot:
+                    {}
+            FR_hip:
+              FR_thigh:
+                FR_calf:
+                  FR_calflower:
+                    FR_calflower1:
                       {}
-              Head_upper:
-                Head_lower:
-                  {}
-                front_camera:
-                  {}
-              RL_hip:
-                RL_thigh:
-                  RL_calf:
-                    RL_calflower:
-                      RL_calflower1:
-                        {}
-                    RL_foot:
-                      {}
-              RR_hip:
-                RR_thigh:
-                  RR_calf:
-                    RR_calflower:
-                      RR_calflower1:
-                        {}
-                    RR_foot:
-                      {}
-              base_footprint:
+                  FR_foot:
+                    {}
+            Head_upper:
+              Head_lower:
                 {}
-              imu:
+              front_camera:
                 {}
-              radar:
-                {}
+            RL_hip:
+              RL_thigh:
+                RL_calf:
+                  RL_calflower:
+                    RL_calflower1:
+                      {}
+                  RL_foot:
+                    {}
+            RR_hip:
+              RR_thigh:
+                RR_calf:
+                  RR_calflower:
+                    RR_calflower1:
+                      {}
+                  RR_foot:
+                    {}
+            base_footprint:
+              {}
+            imu:
+              {}
+            radar:
+              {}
       Update Interval: 0
       Value: true
   Enabled: true
@@ -565,25 +556,25 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
-      Distance: 20.45194435119629
+      Distance: 4.273183822631836
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: -0.15996477007865906
-        Y: -1.3769538402557373
-        Z: 0.28277719020843506
+        X: 1.0288101434707642
+        Y: 0.0029931417666375637
+        Z: 0.4182751178741455
       Focal Shape Fixed Size: false
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 1.1052031517028809
+      Pitch: 0.840203046798706
       Target Frame: base_link
       Value: Orbit (rviz_default_plugins)
-      Yaw: 6.2649688720703125
+      Yaw: 4.609969615936279
     Saved: ~
 Window Geometry:
   Displays:

@@ -90,7 +90,7 @@ def generate_launch_description():
     # slam_toolbox_config = os.path.join(
     #     get_package_share_directory("go2_robot_sdk"), "config", "mapper_params_online_async.yaml"
     # )
-    slam_toolbox_config = "/home/unitree/go2_ros2_ws/src/go2_robot_sdk/config/mapper_params_online_async.yaml"
+    slam_toolbox_config = "/home/unitree/go2_ros2_simon_ws/src/go2_robot_sdk/config/mapper_params_online_async.yaml"
 
     nav2_config = os.path.join(get_package_share_directory("go2_robot_sdk"), "config", "nav2_params.yaml")
 
@@ -160,114 +160,125 @@ def generate_launch_description():
                 ),
             )
 
+    leaf_size = DeclareLaunchArgument("leaf_size", default_value="0.12", description="Voxel grid leaf size")
+    pcl_node = Node(
+        package="pcl_ros",
+        # executable="filter_voxel_grid_node",
+        # name="filter_voxel_grid_node",
+        # parameters=[
+        #     {
+        #         "leaf_size": LaunchConfiguration("leaf_size"),
+        #         "filter_field_name": "z",
+        #         "filter_limit_min": 0.0,
+        #         "filter_limit_max": 0.7,
+        #         "filter_limit_negative": False,
+        #     }
+        # ],
+        # remappings=[
+        #     ("input", "/utlidar/cloud"),
+        #     ("output", "/utlidar/pcl"),
+        # ],
+        executable="filter_crop_box_node",
+        name="filter_crop_box_node",
+        parameters=[
+            {
+                "min_x": -2.0,
+                "max_x": 2.0,
+                "min_y": -2.0,
+                "max_y": 2.0,
+                "min_z": 0.0,
+                "max_z": 0.01,
+                "negative": True,
+            }
+        ],
+        remappings=[
+            ("input", "/utlidar/cloud"),
+            ("output", "/utlidar/pcl"),
+        ],
+    )
+    go2_driver_node = Node(
+        package="go2_robot_sdk",
+        executable="go2_driver_node",
+        parameters=[
+            {
+                "robot_ip": robot_ip,
+                "token": robot_token,
+                "conn_type": conn_type,
+                "enable_video": "False",
+                # "lidar_topic": "/utlidar/cloud",
+                # "lidar_topic": "/utlidar/pcl",
+                "lidar_topic": "/utlidar/cloud_deskewed",
+            }
+        ],
+        output="screen",
+    )
+    lidar_to_pointcloud = Node(
+        package="go2_robot_sdk",
+        executable="lidar_to_pointcloud",
+        parameters=[{"robot_ip_lst": robot_ip_lst, "map_name": map_name, "map_save": save_map}],
+    )
+    rviz = Node(
+        package="rviz2",
+        namespace="",
+        executable="rviz2",
+        condition=IfCondition(with_rviz2),
+        name="rviz2",
+        # arguments=["-d" + os.path.join(get_package_share_directory("go2_robot_sdk"), "config", rviz_config)],
+        arguments=[
+            "-d" + f"/home/unitree/go2_ros2_simon_ws/src/go2_robot_sdk/config/{rviz_config}",
+        ],
+    )
+    joy = Node(package="joy", executable="joy_node", condition=IfCondition(with_joystick), parameters=[joy_params])
+    teleop_node = Node(
+        package="teleop_twist_joy",
+        executable="teleop_node",
+        name="teleop_node",
+        condition=IfCondition(with_joystick),
+        parameters=[default_config_topics],
+    )
+    twist_mux = Node(
+        package="twist_mux",
+        executable="twist_mux",
+        output="screen",
+        condition=IfCondition(with_teleop),
+        parameters=[{"use_sim_time": use_sim_time}, default_config_topics],
+    )
+    slam_toolbox_node = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            [os.path.join(get_package_share_directory("slam_toolbox"), "launch", "online_async_launch.py")]
+        ),
+        condition=IfCondition(with_slam),
+        launch_arguments={
+            "slam_params_file": slam_toolbox_config,
+            "use_sim_time": use_sim_time,
+        }.items(),
+    )
+    nav2_node = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            [os.path.join(get_package_share_directory("nav2_bringup"), "launch", "navigation_launch.py")]
+        ),
+        condition=IfCondition(with_nav2),
+        launch_arguments={
+            "params_file": nav2_config,
+            "use_sim_time": use_sim_time,
+        }.items(),
+    )
+    # foxglove=IncludeLaunchDescription(
+    #             FrontendLaunchDescriptionSource(foxglove_launch),
+    #             condition=IfCondition(with_foxglove),
+    #         )
     return LaunchDescription(
         [
-            DeclareLaunchArgument("leaf_size", default_value="0.12", description="Voxel grid leaf size"),
             *urdf_launch_nodes,
-            Node(
-                package="pcl_ros",
-                # executable="filter_voxel_grid_node",
-                # name="filter_voxel_grid_node",
-                # parameters=[
-                #     {
-                #         "leaf_size": LaunchConfiguration("leaf_size"),
-                #         "filter_field_name": "z",
-                #         "filter_limit_min": 0.0,
-                #         "filter_limit_max": 0.7,
-                #         "filter_limit_negative": False,
-                #     }
-                # ],
-                # remappings=[
-                #     ("input", "/utlidar/cloud"),
-                #     ("output", "/utlidar/pcl"),
-                # ],
-                executable="filter_crop_box_node",
-                name="filter_crop_box_node",
-                parameters=[
-                    {
-                        "min_x": -2.0,
-                        "max_x": 2.0,
-                        "min_y": -2.0,
-                        "max_y": 2.0,
-                        "min_z": 0.0,
-                        "max_z": 0.01,
-                        "negative": True,
-                    }
-                ],
-                remappings=[
-                    ("input", "/utlidar/cloud"),
-                    ("output", "/utlidar/pcl"),
-                ],
-            ),
-            Node(
-                package="go2_robot_sdk",
-                executable="go2_driver_node",
-                parameters=[
-                    {
-                        "robot_ip": robot_ip,
-                        "token": robot_token,
-                        "conn_type": conn_type,
-                        "enable_video": "False",
-                        # "lidar_topic": "/utlidar/cloud",
-                        # "lidar_topic": "/utlidar/pcl",
-                        "lidar_topic": "/utlidar/cloud_deskewed",
-                    }
-                ],
-            ),
-            Node(
-                package="go2_robot_sdk",
-                executable="lidar_to_pointcloud",
-                parameters=[{"robot_ip_lst": robot_ip_lst, "map_name": map_name, "map_save": save_map}],
-            ),
-            Node(
-                package="rviz2",
-                namespace="",
-                executable="rviz2",
-                condition=IfCondition(with_rviz2),
-                name="rviz2",
-                # arguments=["-d" + os.path.join(get_package_share_directory("go2_robot_sdk"), "config", rviz_config)],
-                arguments=[
-                    "-d" + f"/home/unitree/go2_ros2_ws/src/go2_robot_sdk/config/{rviz_config}",
-                ],
-            ),
-            Node(package="joy", executable="joy_node", condition=IfCondition(with_joystick), parameters=[joy_params]),
-            Node(
-                package="teleop_twist_joy",
-                executable="teleop_node",
-                name="teleop_node",
-                condition=IfCondition(with_joystick),
-                parameters=[default_config_topics],
-            ),
-            Node(
-                package="twist_mux",
-                executable="twist_mux",
-                output="screen",
-                condition=IfCondition(with_teleop),
-                parameters=[{"use_sim_time": use_sim_time}, default_config_topics],
-            ),
-            IncludeLaunchDescription(
-                PythonLaunchDescriptionSource(
-                    [os.path.join(get_package_share_directory("slam_toolbox"), "launch", "online_async_launch.py")]
-                ),
-                condition=IfCondition(with_slam),
-                launch_arguments={
-                    "slam_params_file": slam_toolbox_config,
-                    "use_sim_time": use_sim_time,
-                }.items(),
-            ),
-            IncludeLaunchDescription(
-                PythonLaunchDescriptionSource(
-                    [os.path.join(get_package_share_directory("nav2_bringup"), "launch", "navigation_launch.py")]
-                ),
-                condition=IfCondition(with_nav2),
-                launch_arguments={
-                    "params_file": nav2_config,
-                    "use_sim_time": use_sim_time,
-                }.items(),
-            ),
-            # IncludeLaunchDescription(
-            #     FrontendLaunchDescriptionSource(foxglove_launch),
-            #     condition=IfCondition(with_foxglove),
-            # ),
+            # lidar_to_pointcloud,
+            # pcl_node,
+            # joy,
+            go2_driver_node,
+            rviz,
+            twist_mux,
+            teleop_node,
+            # slam_toolbox_node,
+            # nav2_node,
+            # foxglove,
         ]
     )
