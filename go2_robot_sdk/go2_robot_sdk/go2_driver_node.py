@@ -90,7 +90,8 @@ class RobotBaseNode(Node):
         self.get_logger().info(f"Connection mode is {self.conn_mode}")
         self.get_logger().info(f"Enable video is {self.enable_video}")
         self.get_logger().info(f"Decode lidar is {self.decode_lidar}")
-        self.get_logger().info(f"Publish raw voxel is {self.publish_raw_voxel}")
+        self.get_logger().info(
+            f"Publish raw voxel is {self.publish_raw_voxel}")
 
         self.conn = {}
         qos_profile = QoSProfile(depth=10)
@@ -161,7 +162,6 @@ class RobotBaseNode(Node):
                             Image,
                             f"robot{i}/camera/image_raw",
                             best_effort_qos,
-                            # qos_overriding_options=QoSOverridingOptions.with_default_policies()
                         )
                     )
                     self.camera_info_pub.append(
@@ -169,7 +169,6 @@ class RobotBaseNode(Node):
                             CameraInfo,
                             f"robot{i}/camera/camera_info",
                             best_effort_qos,
-                            # qos_overriding_options=QoSOverridingOptions.with_default_policies()
                         )
                     )
                 if self.publish_raw_voxel:
@@ -252,8 +251,14 @@ class RobotBaseNode(Node):
                 self.robot_cmd_vel_msg = self.sport_client.move(x, y, z)
 
     def webrtc_req_cb(self, msg, robot_num):
-        payload = gen_command(msg.api_id, msg.parameter, msg.topic)
-        self.get_logger().debug(f"Received WebRTC request: {payload}")
+        parameter_str = msg.parameter if msg.parameter else ""
+        try:
+            parameter = json.loads(parameter_str)
+        except ValueError as e:
+            self.get_logger().error(f"Invalid JSON in WebRTC request: {e}")
+            parameter = parameter_str
+        payload = gen_command(msg.api_id, parameter, msg.topic, msg.id)
+        self.get_logger().info(f"Received WebRTC request: {payload[:50]}")
         self.webrtc_msgs.put_nowait(payload)
 
     def joy_cb(self, msg):
@@ -621,33 +626,18 @@ class RobotBaseNode(Node):
                 self.go2_state_pub[i].publish(go2_state)
 
                 imu = IMU()
-                imu.quaternion = list(map(float, self.robot_sport_state[str(i)]["data"]["imu_state"]["quaternion"]))
-                imu.accelerometer = list(
-                    map(float, self.robot_sport_state[str(i)]["data"]["imu_state"]["accelerometer"])
-                )
-                imu.gyroscope = list(map(float, self.robot_sport_state[str(i)]["data"]["imu_state"]["gyroscope"]))
-                imu.rpy = list(map(float, self.robot_sport_state[str(i)]["data"]["imu_state"]["rpy"]))
-                imu.temperature = self.robot_sport_state[str(i)]["data"]["imu_state"]["temperature"]
+                imu.quaternion = list(
+                    map(float, self.robot_sport_state[str(i)]["data"]["imu_state"]["quaternion"]))
+                imu.accelerometer = list(map(
+                    float, self.robot_sport_state[str(i)]["data"]["imu_state"]["accelerometer"]))
+                imu.gyroscope = list(
+                    map(float, self.robot_sport_state[str(i)]["data"]["imu_state"]["gyroscope"]))
+                imu.rpy = list(
+                    map(float, self.robot_sport_state[str(i)]["data"]["imu_state"]["rpy"]))
+                imu.temperature = self.robot_sport_state[str(
+                    i)]["data"]["imu_state"]["temperature"]
                 self.imu_pub[i].publish(imu)
 
-    @staticmethod
-    def transform_pc(transform: TransformStamped, msg: PointCloud2, header: Header):
-        pc_data = point_cloud2_sen.read_points(msg, field_names=("x", "y", "z"), skip_nans=True)
-        pc_array = np.array(list(pc_data))
-
-        transformed_points = []
-        for point in pc_array:
-            point_stamped = PointStamped()
-            point_stamped.header = msg.header
-            point_stamped.point.x = point[0]
-            point_stamped.point.y = point[1]
-            point_stamped.point.z = point[2]
-
-            transformed_point = tf2_geometry_msgs.do_transform_point(point_stamped, transform)
-            transformed_points.append([transformed_point.point.x, transformed_point.point.y, transformed_point.point.z])
-
-        transformed_pc = point_cloud2_sen.create_cloud_xyz32(header, transformed_points)
-        return transformed_pc
 
     async def run(self, conn, robot_num):
         self.conn[robot_num] = conn
@@ -666,24 +656,26 @@ class RobotBaseNode(Node):
 
 
 async def spin(node: Node):
-    cancel = node.create_guard_condition(lambda: None)
-
-    def _spin(node: Node, future: asyncio.Future, event_loop: asyncio.AbstractEventLoop):
-        while not future.cancelled():
-            rclpy.spin_once(node)
-        if not future.cancelled():
-            event_loop.call_soon_threadsafe(future.set_result, None)
-
-    event_loop = asyncio.get_event_loop()
-    spin_task = event_loop.create_future()
-    spin_thread = threading.Thread(target=_spin, args=(node, spin_task, event_loop))
+    """Spin the node in a separate thread with proper context management."""
+    executor = rclpy.executors.SingleThreadedExecutor()
+    executor.add_node(node)
+    spin_thread = threading.Thread(target=executor.spin, daemon=True)
     spin_thread.start()
+
+    # Create a future that will be completed when we want to stop spinning
+    event_loop = asyncio.get_event_loop()
+    stop_future = event_loop.create_future()
+
     try:
-        await spin_task
+        # Wait until the future is completed or cancelled
+        await stop_future
     except asyncio.CancelledError:
-        cancel.trigger()
-    spin_thread.join()
-    node.destroy_guard_condition(cancel)
+        # Handle cancellation
+        pass
+    finally:
+        # Shutdown the executor and join the thread
+        executor.shutdown()
+        spin_thread.join(timeout=1.0)  # Add timeout to avoid hanging
 
 
 async def start_node():
