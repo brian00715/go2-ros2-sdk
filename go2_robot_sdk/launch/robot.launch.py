@@ -54,10 +54,10 @@ def generate_launch_description():
 
     conn_type = os.getenv("CONN_TYPE", "webrtc")
 
-    # conn_mode = "single" if len(robot_ip_lst) == 1 and conn_type != "cyclonedds" else "multi"
-    conn_mode = "single"
+    conn_mode = "single" if len(robot_ip_lst) == 1 or conn_type == "cyclonedds" else "multi"
+    print("Connection mode:", conn_mode)
 
-    if conn_mode == "single":
+    if conn_mode == 'single':
         rviz_config = "single_robot_conf.rviz"
     else:
         rviz_config = "multi_robot_conf.rviz"

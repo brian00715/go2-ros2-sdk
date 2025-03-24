@@ -83,8 +83,7 @@ class RobotBaseNode(Node):
         self.publish_raw_voxel = self.get_parameter("publish_raw_voxel").get_parameter_value().bool_value
         self.lidar_topic = self.get_parameter("lidar_topic").get_parameter_value().string_value
 
-        # self.conn_mode = "single" if (len(self.robot_ip_lst) == 1 and self.conn_type != "cyclonedds") else "multi"
-        self.conn_mode = "single"
+        self.conn_mode = "single" if (len(self.robot_ip_lst) == 1) else "multi"
 
         self.get_logger().info(f"Received ip list: {self.robot_ip_lst}")
         self.get_logger().info(f"Connection type is {self.conn_type}")
@@ -352,7 +351,7 @@ class RobotBaseNode(Node):
                 self.conn[robot_num].data_channel.send(stand_up_cmd)
                 move_cmd = gen_command(ROBOT_CMD["BalanceStand"])
                 self.conn[robot_num].data_channel.send(move_cmd)
-                
+
         elif self.conn_type == "cyclonedds":
             if self.robot_cmd_vel_msg:
                 self.sport_pub.publish(self.robot_cmd_vel_msg)
